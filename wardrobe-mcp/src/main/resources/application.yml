@@ -1,0 +1,21 @@
+# stdout принадлежит MCP-протоколу: никаких баннеров и логов в консоль.
+spring:
+  main:
+    web-application-type: none
+    banner-mode: off
+  ai:
+    mcp:
+      server:
+        name: wardrobe
+        version: 1.0.0
+        type: sync
+        stdio: true
+
+logging:
+  console:
+    enabled: false
+  file:
+    name: ${java.io.tmpdir}/wardrobe-mcp.log
+
+wardrobe:
+  api-url: ${API_URL}

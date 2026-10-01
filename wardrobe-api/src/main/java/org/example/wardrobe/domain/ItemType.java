@@ -1,0 +1,9 @@
+package org.example.wardrobe.domain;
+
+public enum ItemType {
+    T_SHIRT, CROP_TOP, SHIRT, BLOUSE, TURTLENECK, SWEATER, CARDIGAN, SWEATSHIRT,
+    JEANS, TROUSERS, SKIRT, SHORTS,
+    DRESS,
+    PUFFER, TRENCH, COAT, JACKET,
+    SNEAKERS, BOOTS, UGG_BOOTS, SANDALS
+}
