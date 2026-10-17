@@ -160,7 +160,8 @@ public record Fact(
                 createdAt, supersedes, next, nextForgottenAt, nextForgottenIn);
     }
 
-    private static void checkId(String id) {
+    /** Формат id факта из запроса; иначе {@code MEM-VAL-009}. */
+    public static void checkId(String id) {
         if (id == null || !ID.matcher(id).matches()) {
             throw new MemoryException(ErrorCode.VAL_009, "invalid fact id \"" + id + "\"");
         }

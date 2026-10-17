@@ -7,9 +7,13 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 
+import org.example.wardrobe.memory.application.ExtractorDecision;
+import org.example.wardrobe.memory.application.FactWriter;
 import org.example.wardrobe.memory.domain.ErrorCode;
 import org.example.wardrobe.memory.domain.Fact;
 import org.example.wardrobe.memory.domain.FactKind;
@@ -124,6 +128,29 @@ class JdbcFactRepositoryTest {
                 .containsExactly(third.id(), second.id(), first.id());
         assertThat(facts.findChain("f-999")).isEmpty();
         assertThat(ftsIds()).containsExactly(third.id());
+    }
+
+    @Test
+    void supersedeInOneTransaction() {
+        FactWriter writer = new FactWriter(facts, db.tx, Clock.fixed(NOW, ZoneOffset.UTC));
+        Fact first = skirts();
+
+        Fact next = writer.apply(turn("теперь ношу длинные юбки"),
+                new ExtractorDecision("SUPERSEDE", first.id(), "constraint", "skirts", "Носит длинные юбки",
+                        "ношу длинные юбки", "stated")).orElseThrow();
+
+        assertThat(facts.findById(first.id())).map(Fact::status).contains(FactStatus.SUPERSEDED);
+        assertThat(facts.findActive("me", "skirts")).contains(next);
+        assertThat(ftsIds()).containsExactly(next.id());
+
+        Turn unsaved = Turn.open("t-099", "ext-unsaved", "me", "s-1", "снова не ношу юбки", NOW);
+        assertThatThrownBy(() -> writer.apply(unsaved, new ExtractorDecision("SUPERSEDE", next.id(), "constraint",
+                "skirts", "Снова не носит юбки", "снова не ношу юбки", "stated")))
+                .as("вставка новой версии падает на внешнем ключе после update старой")
+                .isInstanceOf(DataAccessException.class);
+        assertThat(facts.findById(next.id())).map(Fact::status).as("update старой откатился").contains(FactStatus.ACTIVE);
+        assertThat(facts.findActiveByUser("me")).containsExactly(next);
+        assertThat(ftsIds()).containsExactly(next.id());
     }
 
     @Test

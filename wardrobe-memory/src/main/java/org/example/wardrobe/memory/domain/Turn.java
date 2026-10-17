@@ -89,7 +89,8 @@ public record Turn(
         return status == TurnStatus.PENDING && !forgetRequested;
     }
 
-    static void checkUserId(String userId) {
+    /** Формат {@code user_id} из запроса; иначе {@code MEM-VAL-001}. */
+    public static void checkUserId(String userId) {
         if (userId == null || !USER_ID.matcher(userId).matches()) {
             throw new MemoryException(ErrorCode.VAL_001, "user_id is invalid");
         }

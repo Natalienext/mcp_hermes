@@ -16,7 +16,7 @@ final class TestDatabase implements AutoCloseable {
     final Path file;
     final HikariDataSource dataSource;
     final JdbcClient jdbc;
-    private final TransactionTemplate tx;
+    final TransactionTemplate tx;
 
     TestDatabase(Path dir) {
         file = dir.resolve("memory.db");
