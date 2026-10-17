@@ -12,7 +12,7 @@
   - `pom.xml` (корень) — `<module>wardrobe-memory</module>`
   - `wardrobe-memory/pom.xml` — starter-webmvc, starter-jdbc, `org.xerial:sqlite-jdbc`, `org.apache.lucene:lucene-analysis-common`, starter-test, boot-plugin
   - `WardrobeMemoryApplication.java` — `@SpringBootApplication`
-  - `src/main/resources/schema.sql` — `counter`, `turn`, `fact`, индексы `turn_one_open`, `fact_one_active`, `fact_source`, `fact_fts`, триггеры `fact_fts_close`, `fact_append_only`; разделитель `@@`
+  - `src/main/resources/schema.sql` — `counter`, `turn`, `fact`, индексы `turn_one_open`, `fact_one_active`, `fact_source`, `fact_fts`, триггеры `fact_fts_close`, `fact_append_only`; засев `INSERT OR IGNORE INTO counter VALUES ('turn',0),('fact',0)`; разделитель `@@`
   - `infrastructure/search/RussianStems.java` — `index(text)`, `query(text)` (D1)
 - Тесты: `infrastructure/SchemaTest` — схема на файле в `@TempDir`, FTS5 есть; `infrastructure/search/RussianStemsTest` — `allSkirtForms`, стоп-слова, `ё→е`, пустой запрос
 - Приёмка: AC-20 (часть: стемминг)
@@ -29,10 +29,10 @@
 
 **M3: Порты и хранилище SQLite**
 - Файлы:
-  - `domain/TurnRepository`, `domain/FactRepository` (`findById`, `findActive`, `findActiveByUser`, `findChain`, `insert`, `update`), `domain/FactSearch` (`search`, `compact`)
-  - `infrastructure/persistence/JdbcTurnRepository`, `JdbcFactRepository` (FTS-строка при insert через `RussianStems.index`; нарушение `fact_one_active` → STATE-004; `RAISE` триггера → STATE-010)
+  - `domain/TurnRepository` (`nextId`, …), `domain/FactRepository` (`nextId`, `findById`, `findActive`, `findActiveByUser`, `findChain`, `insert`, `update`), `domain/FactSearch` (`search`, `compact`)
+  - `infrastructure/persistence/JdbcTurnRepository`, `JdbcFactRepository` (`nextId`: `UPDATE counter SET n=n+1 WHERE name=? RETURNING n` → `t-`/`f-` + 3 цифры, в транзакции вставки; FTS-строка при insert через `RussianStems.index`; нарушение `fact_one_active` → STATE-004; `RAISE` триггера → STATE-010)
   - `infrastructure/search/FtsFactSearch` — SQL recall с `LIMIT ?`
-  - `src/main/resources/application.yml` — порт 8091, `MEMORY_DB_PATH`, Hikari `maximum-pool-size: 1`, `connection-init-sql: PRAGMA secure_delete=ON`, `sql.init.mode: always`, `separator: "@@"`
+  - `src/main/resources/application.yml` — порт 8091, `MEMORY_DB_PATH` (обязательный, без умолчания), Hikari `maximum-pool-size: 1`, `connection-init-sql: PRAGMA secure_delete=ON`, `sql.init.mode: always`, `separator: "@@"`
 - Тесты (`infrastructure/`): `JdbcTurnRepositoryTest` (`turn_one_open`), `JdbcFactRepositoryTest` (`fact_one_active`, `appendOnly`, `eraseSuperseded`, CHECK-и забытого, FTS insert/удаление, `forgottenTextNotInFile`), `FtsFactSearchTest` (`findsOtherWordForm`, только `stated`+`active`, `limitZero`, забытый не находится)
 - Приёмка: AC-6/7 (индекс), AC-9 (SQL), AC-10 (хранилище, I9), AC-13, AC-14 (`LIMIT`), AC-17 (индекс), AC-20
 - Проверка: `"$MVN" -pl wardrobe-memory test`
@@ -67,7 +67,7 @@
 - Зависит от: M1 (корневой pom); ручной прогон — M6
 
 **M8: Хук `wardrobe-memory-hook`**
-- Файлы: корневой `pom.xml` — `<module>`; `wardrobe-memory-hook/pom.xml` (без Spring, `jackson-databind`, fat jar `wardrobe-memory-hook.jar` с `Main-Class`); `.../memory/hook/HookMain` (печатает только итог, `exit 0`), `Hook` (`run(stdin, stdout, env)`, `catch Throwable`, D10), `HookPayload` (`parse`, `user_message` только строка — D5), `MemoryClient` (JDK `HttpClient`, `MEMORY_HOOK_TIMEOUT_MS`)
+- Файлы: корневой `pom.xml` — `<module>`; `wardrobe-memory-hook/pom.xml` (без Spring, `jackson-databind`, `maven-shade-plugin` → fat jar `wardrobe-memory-hook.jar` с `Main-Class`); `.../memory/hook/HookMain` (печатает только итог, `exit 0`), `Hook` (`run(stdin, stdout, env)`, `catch Throwable`, D10), `HookPayload` (`parse`, `user_message` только строка — D5), `MemoryClient` (JDK `HttpClient`, `MEMORY_HOOK_TIMEOUT_MS`)
 - Тесты: `HookTest` (JDK `HttpServer` как фейк): `serviceDown`, `serviceSlow`, `badJson`, pre → `{"context"}`, пустой `context` → пусто, `recallFailsTurnStillOpens`, post → `/turns/close`
 - Приёмка: AC-18, AC-19, AC-22 (хук)
 - Проверка: `"$MVN" -pl wardrobe-memory-hook verify`; ручное: `time java -jar wardrobe-memory-hook/target/wardrobe-memory-hook.jar < payload.json` при остановленном сервисе < 5 с
@@ -105,10 +105,10 @@ M1 → M2 → M3 → M5 → M6 → M9. M4 идёт параллельно M3 (н
 
 ## Пробелы design
 
-1. **Выдача id из `counter`.** Таблица есть (`UPDATE … RETURNING n`), но не названо, какой порт её отдаёт. Plan ставит `nextId()` в `TurnRepository` / `FactRepository` — подтвердить.
-2. **`MEMORY_DB_PATH` по умолчанию** не задан. Plan: обязательный env без значения по умолчанию — подтвердить.
-3. **Сборка fat jar хука** — плагин не назван (grill Р9: «fat jar»). Plan: `maven-shade-plugin`.
-4. **Последний коммит Л6 для AC-23** не назван; plan берёт `2490b15` (Initial commit) — подтвердить.
+1. **Выдача id из `counter`.** Таблица есть (`UPDATE … RETURNING n`), но не названо, какой порт её отдаёт, и строки счётчиков не засеяны. **Решено человеком:** `nextId()` в `TurnRepository` / `FactRepository`, засев `counter` в `schema.sql` (M1, M3).
+2. **`MEMORY_DB_PATH` по умолчанию** не задан. **Решено человеком:** обязательный env без значения по умолчанию — без него сервис не стартует (как `API_URL` в `wardrobe-mcp`); один явный путь для снимков базы в замере. Тесты задают путь из `@TempDir`.
+3. **Сборка fat jar хука** — плагин не назван (grill Р9: «fat jar»). **Решено человеком:** `maven-shade-plugin` с `Main-Class` (M8).
+4. **Последний коммит Л6 для AC-23** не назван. **Решено человеком:** `2490b15` (Initial commit) — в нём весь код Л6, после него `wardrobe-api`/`wardrobe-mcp` не менялись.
 
 ## Прогноз (написан до кода)
 
