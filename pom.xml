@@ -21,6 +21,7 @@
         <module>wardrobe-mcp</module>
         <module>wardrobe-memory</module>
         <module>wardrobe-memory-mcp</module>
+        <module>wardrobe-memory-hook</module>
     </modules>
 
     <properties>
