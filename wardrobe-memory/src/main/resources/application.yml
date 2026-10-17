@@ -11,3 +11,5 @@ spring:
     init:
       mode: always
       separator: "@@"
+  jackson:
+    property-naming-strategy: SNAKE_CASE
