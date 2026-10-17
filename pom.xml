@@ -19,6 +19,7 @@
     <modules>
         <module>wardrobe-api</module>
         <module>wardrobe-mcp</module>
+        <module>wardrobe-memory</module>
     </modules>
 
     <properties>
