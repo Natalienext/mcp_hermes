@@ -32,3 +32,22 @@
   4. Порядок проверок `supersededBy`: сначала «другой пользователь» (STATE-002), потом статус (STATE-001) — чтобы по чужому id не узнать статус чужого факта. Design порядок не задаёт.
   5. Возраст «N дней назад» — дословно по design, без согласования числа («2 дней назад»).
 - Факт: 3 мин (17:22:45–17:26:05 UTC), output 24 158 токенов, 8 вызовов модели, 0 переделок.
+
+### M3: Порты и хранилище SQLite
+
+- Сделано:
+  - порты `domain/TurnRepository` (`nextId`, `findById`, `findByExternalId`, `findOpen`, `insert`, `update`), `domain/FactRepository` (`nextId`, `findById`, `findActive`, `findActiveByUser`, `findChain`, `insert`, `update`), `domain/FactSearch` (`search`, `compact`);
+  - `infrastructure/persistence/JdbcTurnRepository`, `JdbcFactRepository` (`JdbcClient`; `nextId` — `UPDATE counter SET n = n + 1 WHERE name = ? RETURNING n` → `t-001` / `f-001`; `insert` пишет строку FTS через `RussianStems.index(fact + " " + quote)`, если факт `active`; нарушение `fact_one_active` → STATE-004; `RAISE` триггера → STATE-010), общий маппер `FactRows`, `Counter`;
+  - `infrastructure/search/FtsFactSearch` — SQL recall из design с `LIMIT ?`; `compact()` — FTS `optimize`;
+  - `application.yml` — порт 8091, `jdbc:sqlite:${MEMORY_DB_PATH}?foreign_keys=on` без умолчания, Hikari `maximum-pool-size: 1`, `connection-init-sql: PRAGMA secure_delete=ON`, `sql.init.mode: always`, `separator: "@@"`.
+- Тесты (`infrastructure/`, SQLite-файл в `@TempDir`, общий помощник `TestDatabase` с настройками как в `application.yml`): `JdbcTurnRepositoryTest` 7 (`nextId` по порядку и откат с транзакцией, round trip, `turn_one_open`, уникальный `external_id`, CHECK-и стёртого текста), `JdbcFactRepositoryTest` 8 (round trip и поиск, `fact_one_active` → STATE-004, цепочка замен, `appendOnly` → STATE-010, `eraseSuperseded`, CHECK-и забытого, FTS-строка при insert и удаление при смене статуса, `forgottenTextNotInFile`), `FtsFactSearchTest` 7 (`findsOtherWordForm`, только `stated` + `active` своего пользователя, заменённый не находится, `LIMIT`, `limitZero`, забытый не находится, запрос из одних стоп-слов).
+- Проверка: `"$MVN" -pl wardrobe-memory clean test` — 65 из 65 прошли (22 новых + 43 из M1–M2). Первый прогон: 64 из 65, упал `JdbcFactRepositoryTest.factOneActive`.
+- Переделка 1: в `factOneActive` я ожидал, что после отказа STATE-004 следующий id — `f-003`; пришёл `f-002`, потому что `UPDATE counter` откатился вместе с отказанной вставкой. Так и требуют plan и design (`nextId` «в транзакции вставки»), ошибка была в ожидании теста, не в коде: ожидание исправлено на `f-002` с пояснением в `as(...)`. Это правка теста, а не реализации, — записываю её здесь явно.
+- Риски из прогноза («триггеры, FTS, `secure_delete`») не сработали: триггеры, FTS-строки и стирание байтов файла (`forgottenTextNotInFile`) прошли с первого раза; `?foreign_keys=on` проверен отдельным разовым тестом (`PRAGMA foreign_keys` = 1, `secure_delete` = 1), тест удалён.
+- Отклонения:
+  1. `TurnRepository` получил `insert` / `update` (как `FactRepository`) вместо `save` / `saveAll` из потока данных design; в plan методы порта хода не перечислены («…»). Одну транзакцию на `abandon` + `open` даст `TransactionTemplate` в M5.
+  2. Классы адаптеров `public`, а не package-private, как `JpaItemRepository` в Л6: тесты лежат в `infrastructure/` (по plan), а `FtsFactSearch` из `search/` читает строки через `FactRows` из `persistence/`.
+  3. `update(Fact)` пишет все столбцы, а не только изменяемые: иначе запрещённое изменение (тема, род, `standing`) молча терялось бы, а не ловилось триггером `fact_append_only`.
+  4. Уникальный `external_id` и `turn_one_open` в адаптере не переводятся в коды (видно как `DataAccessException`): plan велит переводить только `fact_one_active` и триггер. STATE-008 при повторном `external_id` — дело `OpenTurnUseCase` (M5).
+  5. `application.yml` в M3 не загружается ни одним тестом: контекст Spring поднимет `MemoryControllerTest` в M6.
+- Факт: 3 мин (17:26:05–17:29:26 UTC), output 23 458 токенов, 7 вызовов модели, 1 переделка.

@@ -1,0 +1,13 @@
+server:
+  port: 8091
+
+spring:
+  datasource:
+    url: jdbc:sqlite:${MEMORY_DB_PATH}?foreign_keys=on
+    hikari:
+      maximum-pool-size: 1
+      connection-init-sql: PRAGMA secure_delete=ON
+  sql:
+    init:
+      mode: always
+      separator: "@@"
