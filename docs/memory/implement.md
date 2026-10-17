@@ -3,6 +3,7 @@
 - **Дата:** 2026-10-17
 - **Вход:** `docs/memory/plan.md` (вехи M1–M9, прогноз), `docs/memory/design.md`, `docs/memory/grill.md`.
 - **Объём запуска:** вехи M1–M3 (по просьбе автора; M4–M9 — следующим запуском).
+- **Второй запуск:** вехи M4–M6 (по просьбе автора; M7–M9 — следующим), журнал `~/.claude/projects/…/fbd666b7-….jsonl` (+ `subagents/`, их не было), тот же способ замера.
 - **Сборка:** `MVN="/Applications/IntelliJ IDEA.app/Contents/plugins/maven/lib/maven3/bin/mvn"`, из корня репозитория; JDK 26.0.1, Maven 3.9.11, `java.version` 17.
 - **Замер:** по журналу сессии `~/.claude/projects/…/72602981-….jsonl` (+ `subagents/`, их не было) — сумма поля `usage` ответов модели (по одному на `message.id`) между началом и закрытием вехи; минуты — по меткам времени журнала. Токены в таблице — output, как в прогнозе plan.
 
@@ -51,6 +52,25 @@
   4. Уникальный `external_id` и `turn_one_open` в адаптере не переводятся в коды (видно как `DataAccessException`): plan велит переводить только `fact_one_active` и триггер. STATE-008 при повторном `external_id` — дело `OpenTurnUseCase` (M5).
   5. `application.yml` в M3 не загружается ни одним тестом: контекст Spring поднимет `MemoryControllerTest` в M6.
 - Факт: 3 мин (17:26:05–17:29:26 UTC), output 23 458 токенов, 7 вызовов модели, 1 переделка.
+
+### M4: Экстрактор (адаптер модели)
+
+- Сделано:
+  - `application/Extractor` (порт: `extract(ExtractionInput) → List<ExtractorDecision>`), `ExtractionInput` (`user_text`, `assistant_text`, `candidates`; фабрика `of(turn, activeFacts)` — кандидаты D7), `ExtractorDecision` (все поля строками, как в ответе), `ExtractionFailedException` (код EXT-001 / EXT-002);
+  - `infrastructure/extractor/OpenAiCompatibleExtractor` — `RestClient` → `POST {base}/chat/completions`, `model`, `temperature=0`, `response_format={"type":"json_object"}`, system = `ExtractorPrompt.SYSTEM`, user = JSON входа; `Authorization: Bearer …` только при непустом ключе; таймаут соединения и чтения — `SimpleClientHttpRequestFactory` из `EXTRACTOR_TIMEOUT`; одна попытка; `RestClientException` (сеть, таймаут, не 2xx) → EXT-001; нет `choices[0].message.content`, `content` не JSON после снятия ```` ```json ````, нет массива `decisions` → EXT-002; элемент не объект или поле не строка → в лог `extract reject element=<i> code=MEM-EXT-002`, отклоняется только он;
+  - `ExtractorPrompt.SYSTEM` — дословно из design (сверено скриптом с `design.md:205-240`, совпадает);
+  - `ExtractorProperties` (`@ConfigurationProperties("extractor")`, умолчания из design: `https://openrouter.ai/api/v1`, `deepseek/deepseek-v4.1-flash`, ключ пуст, 30 с; `toString` без ключа);
+  - `wardrobe-memory/pom.xml` — `spring-boot-starter-restclient`.
+- Тесты: `infrastructure/extractor/OpenAiCompatibleExtractorTest` 13 (`MockRestServiceServer`): `validJson` (тело запроса: модель, `temperature`, `json_object`, промпт, вход в snake_case), `emptyDecisions`, `markdownWrapperIsRemoved`, `contentNotJsonIsExt002`, `noDecisionsArrayIsExt002`, `completionWithoutContentIsExt002`, `serverErrorIsExt001` (500), `unauthorizedIsExt001` (401), `timeoutIsExt001`, `malformedElementIsRejectedAlone` (строка вместо объекта, число в `scope`, нет `standing` — отклонены, два валидных остались), `authorizationHeaderWithKey`, `noAuthorizationHeaderWithoutKey`, `keyIsNotInPropertiesToString`.
+- Проверка: `"$MVN" -pl wardrobe-memory test` — 78 из 78 прошли (13 новых + 65 из M1–M3), с первого прогона.
+- Отклонения:
+  1. Два конструктора: публичный (Spring) ставит фабрику запросов с таймаутом и вызывает `restClient(builder, properties)`; пакетный `(RestClient, model)` — для теста: `MockRestServiceServer.bindTo(builder)` сам задаёт фабрику builder-а, и публичный конструктор её бы перезаписал. Следствие: тест `timeoutIsExt001` проверяет реакцию на `SocketTimeoutException` от мока, а не то, что таймаут фабрики реально срабатывает.
+  2. `ExtractionFailedException` наследует `MemoryException` (несёт `ErrorCode`); design имя класса и коды даёт, иерархию — нет.
+  3. Env `EXTRACTOR_*` читается через нестрогую привязку Spring к `extractor.*` (`@ConfigurationProperties`), без строк в `application.yml`; для этого на `WardrobeMemoryApplication` добавлен `@ConfigurationPropertiesScan` — файла нет в списке вехи.
+  4. Отсутствующее поле элемента считается «поле не строка» → элемент отклоняется (design перечисляет только «не объект / поле не строка»).
+  5. `ExtractionInput.of(turn, facts)` и вложенный `Candidate` — форма входа не задана в plan, поля — из design.
+  6. Тест `keyIsNotInPropertiesToString` сверх списка plan: design требует «ключ в лог не пишется», а Spring печатает свойства при ошибке привязки.
+- Факт: 4 мин (17:36:25–17:39:55 UTC), output 22 998 токенов, 18 вызовов модели (включая чтение plan, design, кода M1–M3), 0 переделок.
 
 ## Отклонения (сводка)
 
