@@ -108,6 +108,19 @@
   6. Отдельного теста на 500 `MEM-INT-001` нет: вызвать необработанную ошибку через API без подмены бинов нельзя; plan такого теста не требует.
 - Факт: 4 мин (17:45:20–17:48:42 UTC), output 21 449 токенов, 10 вызовов модели, 0 переделок (одна неудачная запись implement.md скриптом — ошибка кодировки в heredoc, не код вехи; ручной прогон потерял 20 с на глоб zsh в URL с «?»).
 
+### M7: MCP-сервер `wardrobe-memory-mcp`
+
+- Сделано: `<module>wardrobe-memory-mcp</module>` в корневом `pom.xml`; `wardrobe-memory-mcp/pom.xml` (как `wardrobe-mcp/pom.xml`: `spring-ai-starter-mcp-server`, `spring-boot-starter-restclient`, `finalName wardrobe-memory-mcp`, boot-plugin; плюс starter-test); `WardrobeMemoryMcpApplication`; `client/MemoryApiClient` — `remember` → `POST /facts` (`user_id` из `MEMORY_USER_ID`, `supersedes` только если задан), `forget` → `POST /facts/{id}/forget {user_id}`, `list` → `GET /facts?user_id=`; ответ сервиса — строкой как есть; `RestClientResponseException` → тело `{"code","error"}` → `MemoryApiException("MEM-…: сообщение")`, `ResourceAccessException` → «Сервис памяти недоступен»; `client/MemoryApiException`; `tool/MemoryTools` — `memory_remember(fact, quote, kind, scope, supersedes?)`, `memory_forget(id)`, `memory_list()` с описаниями по design и аннотациями, как `wardrobe_search`; ошибка → `CallToolResult.isError=true` с текстом исключения; `application.yml` (stdio, без баннера и консольного лога, лог `${java.io.tmpdir}/wardrobe-memory-mcp.log`, `memory.url: ${MEMORY_URL}`, `memory.user-id: ${MEMORY_USER_ID}`).
+- Тесты: `tool/MemoryToolsTest` 7 (`MockRestServiceServer`): `rememberReturnsServiceJsonAsText` (тело запроса в snake_case, без `supersedes`), `rememberPassesSupersedes`, `conflictIsErrorWithCode` (409 → `isError`, `MEM-STATE-006: …`), `badRequestIsErrorWithCode` (400 VAL-009), `serviceDownIsError` (`ConnectException` → «Сервис памяти недоступен»), `forgetSendsUserId`, `listShowsStanding` (AC-9: `standing` в тексте ответа).
+- Проверка: `"$MVN" -pl wardrobe-memory-mcp verify` — BUILD SUCCESS, 7 из 7 прошли, с первого прогона; jar `wardrobe-memory-mcp/target/wardrobe-memory-mcp.jar`.
+- Ручная проверка: `initialize` + `tools/list` по stdio в `java -jar …` — сервер `wardrobe-memory`, три tool с описаниями и схемами, stdout чистый.
+- Отклонения:
+  1. `kind` — строка с перечнем значений в описании, а не enum, как `ItemType` в `wardrobe_search`: список и VAL-002 держит сервис, plan тип не задаёт.
+  2. Тело ошибки, которое не разобралось как `{"code","error"}` (например, HTML прокси), → `MEM-INT-001: HTTP <статус>`; design описывает только ответ сервиса.
+  3. Тесты сверх трёх из plan: `rememberPassesSupersedes`, `forgetSendsUserId`, `listShowsStanding`, 400 отдельно от 409.
+  4. В `pom.xml` модуля добавлен `spring-boot-starter-test` (в `wardrobe-mcp` тестов нет, образца нет).
+- Факт: 3 мин (17:52:38–17:55:06 UTC; в окно вошло чтение plan, design, `implement.md` и `wardrobe-mcp`), output 11 144 токенов, 12 вызовов модели, 0 переделок.
+
 ## Отклонения (сводка)
 
 Все отклонения записаны в вехах выше: M1 — 3 (версия Lucene 9.12.3, список стоп-слов Lucene, основы в кавычках в `MATCH`), M2 — 5 (исключения целостности без кода, сообщение VAL-008 для `assistant_text`, типы в `Fact.create`, порядок проверок замены, «N дней назад» дословно), M3 — 5 (`insert`/`update` у `TurnRepository`, `public` адаптеры, `update` всех столбцов, без перевода `external_id`/`turn_one_open` в коды, `application.yml` без теста). Фич сверх plan нет. Одна правка теста — ожидание id в `factOneActive` (M3, переделка 1).
