@@ -1,0 +1,4 @@
+  ⚠ tirith security scanner enabled but not available — command scanning will use pattern matching only
+Запомнил: f-001 («не носит юбки») заменён на f-002 — «Иногда носит юбки, но только миди» (preference, scope skirts).
+
+Так как это предпочтение, а не запрет, в исключения wardrobe_search ничего передавать не нужно. Если захотите, чтобы юбки не миди жёстко отсекались в подборе — скажите, оформлю это отдельным constraint.

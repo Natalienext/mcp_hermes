@@ -1,0 +1,2 @@
+  ⚠ tirith security scanner enabled but not available — command scanning will use pattern matching only
+Готово. Факт f-001 («Не носит юбки, в них неуютно») забыт — проверка `memory_list` возвращает пустой список, в памяти о тебе не осталось ничего.

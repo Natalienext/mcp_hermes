@@ -1,0 +1,2 @@
+  ⚠ tirith security scanner enabled but not available — command scanning will use pattern matching only
+Понял — юбки не предлагаю. Если хочешь, скажи «запомни», и я сохраню это как постоянное предпочтение, чтобы учитывать в подборе образов.

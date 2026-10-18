@@ -1,0 +1,8 @@
+2026-10-18T14:25:30.901Z  INFO 77411 --- [nio-8091-exec-1] o.a.c.c.C.[Tomcat].[localhost].[/]       : Initializing Spring DispatcherServlet 'dispatcherServlet'
+2026-10-18T14:25:30.901Z  INFO 77411 --- [nio-8091-exec-1] o.s.web.servlet.DispatcherServlet        : Initializing Servlet 'dispatcherServlet'
+2026-10-18T14:25:30.901Z  INFO 77411 --- [nio-8091-exec-1] o.s.web.servlet.DispatcherServlet        : Completed initialization in 0 ms
+2026-10-18T14:25:30.943Z  INFO 77411 --- [nio-8091-exec-1] o.e.w.memory.application.RecallUseCase   : recall user_id=me ids=[f-001]
+2026-10-18T14:25:30.971Z  INFO 77411 --- [nio-8091-exec-2] o.e.w.m.application.OpenTurnUseCase      : open turn_id=t-002 abandoned=[]
+2026-10-18T14:25:45.550Z  INFO 77411 --- [nio-8091-exec-4] o.e.w.memory.application.ForgetUseCase   : forget fact_id=f-001 session_id=20261018_142528_4908a6
+2026-10-18T14:25:48.074Z  INFO 77411 --- [nio-8091-exec-6] o.e.w.m.application.CloseTurnUseCase     : close turn_id=t-002
+2026-10-18T14:25:48.075Z  INFO 77411 --- [     extraction] o.e.w.m.application.ExtractTurnUseCase   : extract skip turn_id=t-002 reason=forget requested
